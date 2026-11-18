@@ -14,7 +14,7 @@ struct MonumentView: View {
         ZStack(alignment: .top) {
             MonumentMetalView(
                 level: game.level,
-                arrows: game.activeArrows,
+                activeIDs: game.activeIDs,
                 zoom: zoom,
                 pan: pan,
                 onTap: { point, tolerance in game.tap(worldPoint: point, tolerance: tolerance) }
@@ -39,6 +39,11 @@ struct MonumentView: View {
                     Text("Preostalo: \(game.remainingCount) / \(game.level.arrows.count)")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.secondary)
+                    ProgressView(value: game.progress)
+                        .tint(.purple)
+                        .frame(maxWidth: 160)
+                        .accessibilityLabel("Napredak")
+                        .accessibilityValue("\(Int(game.progress * 100)) procenata")
                 }
 
                 Spacer()
@@ -66,8 +71,46 @@ struct MonumentView: View {
             }
             .padding(.horizontal, 16)
             .padding(.top, 8)
+
+            if game.didWin {
+                winOverlay
+                    .transition(.scale(scale: 0.9).combined(with: .opacity))
+            }
         }
+        .animation(.spring(response: 0.4, dampingFraction: 0.82), value: game.didWin)
         .background(Color(red: 0.975, green: 0.98, blue: 0.965))
+    }
+
+    private var winOverlay: some View {
+        VStack(spacing: 18) {
+            Image(systemName: "trophy.fill")
+                .font(.system(size: 58, weight: .bold))
+                .foregroundStyle(.yellow)
+
+            VStack(spacing: 6) {
+                Text("Monument završen!")
+                    .font(.largeTitle.bold())
+                Text("Uklonio si svih 10.000 strelica.")
+                    .font(.headline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+
+            HStack(spacing: 12) {
+                Button("Početni ekran", action: onClose)
+                    .buttonStyle(.bordered)
+                Button("Igraj ponovo") { game.restart() }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.purple)
+            }
+        }
+        .padding(28)
+        .background(.ultraThickMaterial, in: RoundedRectangle(cornerRadius: 28))
+        .shadow(color: .black.opacity(0.18), radius: 24, y: 12)
+        .padding(24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(.black.opacity(0.18))
+        .accessibilityElement(children: .contain)
     }
 
     private var dragGesture: some Gesture {
@@ -90,7 +133,7 @@ struct MonumentView: View {
 
 private struct MonumentMetalView: UIViewRepresentable {
     let level: MonumentLevel
-    let arrows: [MonumentArrow]
+    let activeIDs: Set<UInt32>
     let zoom: CGFloat
     let pan: CGSize
     let onTap: (SIMD2<Float>, Float) -> Void
@@ -121,7 +164,7 @@ private struct MonumentMetalView: UIViewRepresentable {
     func updateUIView(_ view: MTKView, context: Context) {
         context.coordinator.renderer?.zoom = Float(zoom)
         context.coordinator.renderer?.pan = SIMD2(Float(pan.width * view.contentScaleFactor), Float(pan.height * view.contentScaleFactor))
-        context.coordinator.renderer?.update(arrows: arrows)
+        context.coordinator.renderer?.update(activeIDs: activeIDs)
         context.coordinator.onTap = onTap
     }
 }

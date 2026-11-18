@@ -19,7 +19,8 @@ final class MonumentRenderer: NSObject, MTKViewDelegate {
     private let pipeline: MTLRenderPipelineState
     private var vertexBuffer: MTLBuffer?
     private var vertexCount = 0
-    private var renderedArrowIDs: [UInt32] = []
+    private var vertexRanges: [UInt32: Range<Int>] = [:]
+    private var activeIDs: Set<UInt32> = []
     private let boardSize: SIMD2<Float>
 
     var zoom: Float = 1
@@ -47,7 +48,15 @@ final class MonumentRenderer: NSObject, MTKViewDelegate {
         boardSize = SIMD2(level.width, level.height)
         super.init()
 
-        update(arrows: level.arrows)
+        let geometry = Self.makeGeometry(for: level.arrows)
+        vertexCount = geometry.vertices.count
+        vertexRanges = geometry.ranges
+        activeIDs = Set(level.arrows.map(\.id))
+        vertexBuffer = device.makeBuffer(
+            bytes: geometry.vertices,
+            length: MemoryLayout<MonumentVertex>.stride * geometry.vertices.count,
+            options: .storageModeShared
+        )
 
         view.device = device
         view.delegate = self
@@ -80,21 +89,24 @@ final class MonumentRenderer: NSObject, MTKViewDelegate {
         commandBuffer.commit()
     }
 
-    func update(arrows: [MonumentArrow]) {
-        let arrowIDs = arrows.map(\.id)
-        guard arrowIDs != renderedArrowIDs else { return }
-        renderedArrowIDs = arrowIDs
-        let vertices = Self.makeVertices(for: arrows)
-        vertexCount = vertices.count
-        guard !vertices.isEmpty else {
-            vertexBuffer = nil
-            return
-        }
-        vertexBuffer = device.makeBuffer(
-            bytes: vertices,
-            length: MemoryLayout<MonumentVertex>.stride * vertices.count,
-            options: .storageModeShared
+    func update(activeIDs newActiveIDs: Set<UInt32>) {
+        guard newActiveIDs != activeIDs, let vertexBuffer else { return }
+        let removed = activeIDs.subtracting(newActiveIDs)
+        let restored = newActiveIDs.subtracting(activeIDs)
+        let vertices = vertexBuffer.contents().bindMemory(
+            to: MonumentVertex.self,
+            capacity: vertexCount
         )
+
+        for id in removed {
+            guard let range = vertexRanges[id] else { continue }
+            for index in range { vertices[index].color.w = 0 }
+        }
+        for id in restored {
+            guard let range = vertexRanges[id] else { continue }
+            for index in range { vertices[index].color.w = 1 }
+        }
+        activeIDs = newActiveIDs
     }
 
     func worldPoint(for point: CGPoint, in view: MTKView) -> (point: SIMD2<Float>, tolerance: Float) {
@@ -106,12 +118,16 @@ final class MonumentRenderer: NSObject, MTKViewDelegate {
         return (world, 18 * scale / (fit * zoom))
     }
 
-    private static func makeVertices(for arrows: [MonumentArrow]) -> [MonumentVertex] {
+    private static func makeGeometry(
+        for arrows: [MonumentArrow]
+    ) -> (vertices: [MonumentVertex], ranges: [UInt32: Range<Int>]) {
         var vertices: [MonumentVertex] = []
+        var ranges: [UInt32: Range<Int>] = [:]
         vertices.reserveCapacity(arrows.count * 24)
         let lineWidth: Float = 2.4
 
         for arrow in arrows where arrow.points.count >= 2 {
+            let startIndex = vertices.count
             let color = SIMD4(arrow.color.red, arrow.color.green, arrow.color.blue, arrow.color.alpha)
             for index in 0..<(arrow.points.count - 1) {
                 let start = SIMD2(arrow.points[index].x, arrow.points[index].y)
@@ -132,8 +148,9 @@ final class MonumentRenderer: NSObject, MTKViewDelegate {
                 .init(position: base + perpendicular * headWidth, color: color),
                 .init(position: base - perpendicular * headWidth, color: color)
             ])
+            ranges[arrow.id] = startIndex..<vertices.count
         }
-        return vertices
+        return (vertices, ranges)
     }
 
     private static func appendLine(

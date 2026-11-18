@@ -30,4 +30,31 @@ struct ArrowsTests {
         print("Monument 10K initialization: \(elapsed)")
     }
 
+    @MainActor
+    @Test func monumentCanBeCompletedAndRestarted() {
+        let arrow = MonumentArrow(
+            id: 1,
+            points: [.init(x: 10, y: 10), .init(x: 30, y: 10)],
+            color: .init(red: 0.5, green: 0.2, blue: 0.8, alpha: 1)
+        )
+        let level = MonumentLevel(
+            formatVersion: 1,
+            title: "Test",
+            width: 40,
+            height: 20,
+            arrows: [arrow]
+        )
+        let game = MonumentGame(level: level)
+
+        #expect(!game.didWin)
+        #expect(game.progress == 0)
+        game.tap(worldPoint: SIMD2(30, 10), tolerance: 2)
+        #expect(game.didWin)
+        #expect(game.progress == 1)
+
+        game.restart()
+        #expect(!game.didWin)
+        #expect(game.remainingCount == 1)
+    }
+
 }
