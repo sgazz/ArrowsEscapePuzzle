@@ -10,10 +10,24 @@ import Testing
 
 struct ArrowsTests {
 
-    @Test func example() async throws {
-        // Write your test here and use APIs like `#expect(...)` to check expected conditions.
-        // Swift Testing Documentation
-        // https://developer.apple.com/documentation/testing
+    @MainActor
+    @Test func monument10KIsPlayable() {
+        let clock = ContinuousClock()
+        let start = clock.now
+        let game = MonumentGame(level: .stressTest10000)
+        let elapsed = start.duration(to: clock.now)
+
+        #expect(game.remainingCount == 10_000)
+        #expect(game.isRemovable(99))
+        #expect(!game.isRemovable(98))
+
+        let exitArrow = game.level.arrows[99]
+        let head = exitArrow.points.last!
+        game.tap(worldPoint: SIMD2(head.x, head.y), tolerance: 4)
+
+        #expect(game.remainingCount == 9_999)
+        #expect(game.isRemovable(98))
+        print("Monument 10K initialization: \(elapsed)")
     }
 
 }

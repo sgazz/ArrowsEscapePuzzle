@@ -1,7 +1,7 @@
 import SwiftUI
 
 private enum AppScreen {
-    case home, levels, game
+    case home, levels, game, monument
 }
 
 struct ContentView: View {
@@ -23,6 +23,9 @@ struct ContentView: View {
                 levelScreen.transition(.opacity.combined(with: .move(edge: .trailing)))
             case .game:
                 gameScreen.transition(.opacity)
+            case .monument:
+                MonumentView { screen = .home }
+                    .transition(.opacity)
             }
         }
         .animation(.spring(response: 0.42, dampingFraction: 0.84), value: screen)
@@ -96,6 +99,14 @@ struct ContentView: View {
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(GameButtonStyle(color: .teal))
+
+                Button {
+                    screen = .monument
+                } label: {
+                    Label("Monument — 10.000 strelica", systemImage: "scope")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(GameButtonStyle(color: .purple))
             }
             .frame(maxWidth: 360)
 
